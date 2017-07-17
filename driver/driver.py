@@ -4,8 +4,9 @@ from math import sqrt
 import heapq
 import timeit
 import os
-import thread
+#import thread
 import itertools
+from collections import deque
 
 def memory():
     if os.name == 'posix':
@@ -70,8 +71,6 @@ class Stack:
          self.items.append(item)
      def pop(self):
          return self.items.pop()
-     def peek(self):
-         return self.items[len(self.items)-1]
      def size(self):
          return len(self.items)
 
@@ -156,27 +155,33 @@ class Solver(object):
             horizontal = (where_it_is % self.pow) - (should_be % self.pow)
             vertical = ((where_it_is - horizontal) / self.pow) - (should_be / self.pow)
             m_distance += abs(horizontal) + abs(vertical)
-        return m_distance
+        return int(m_distance)
 
 def bfs(solver, initial_state, goal_test):
     if not solver.solvable(initial_state.configuration):
         return False
-    frontier = Queue()
-    frontier.enqueue(initial_state)
+    #frontier = Queue()
+    frontier = deque()
+    #frontier.enqueue(initial_state)
+    frontier.append(initial_state)
     explored = set()
     explored.add(str(initial_state.configuration))
-    while not frontier.isEmpty():
-        solver.max_fringe_size = max(solver.max_fringe_size, frontier.size())
-        current_state = frontier.dequeue()
+    while len(frontier) > 0: # frontier.isEmpty()
+        #solver.max_fringe_size = max(solver.max_fringe_size, frontier.size())
+        solver.max_fringe_size = max(solver.max_fringe_size, len(frontier))
+        #current_state = frontier.dequeue()
+        current_state = frontier.popleft()
         if current_state.configuration == goal_test:
-            solver.fringe_size = frontier.size()
+            #solver.fringe_size = frontier.size()
+            solver.fringe_size = len(frontier)
             solver.path_to_goal = solver.generate_path(initial_state, current_state)
             solver.search_depth = len(solver.path_to_goal)
             return current_state
         solver.nodes_expanded += 1
         for n in solver.generate_neighbours(current_state):
             if str(n.configuration) not in explored:
-                frontier.enqueue(n)
+                #frontier.enqueue(n)
+                frontier.append(n)
                 explored.add(str(n.configuration))
                 solver.max_search_depth = max(solver.max_search_depth, n.depth)
     return False
@@ -208,7 +213,7 @@ def ast(solver, initial_state, goal_test):
     if not solver.solvable(initial_state.configuration):
         return False
     frontier = PriorityQueue()
-    frontier.put(initial_state, float("%s.0" % solver.manhattan_distance(initial_state, goal_state)))
+    frontier.put(initial_state, solver.manhattan_distance(initial_state, goal_state))
     explored = set()
     explored.add(str(initial_state.configuration))
     while not frontier.isEmpty():
@@ -229,30 +234,40 @@ def ast(solver, initial_state, goal_test):
                 frontier.decreaseKey(n, solver)
     return False
 
+def print_end(sol_solver, method):
+    print(method)
+    #print("path_to_goal: " + str(sol_solver.path_to_goal))
+    print("cost_of_path: " + str(len(sol_solver.path_to_goal)))
+    print("nodes_expanded: " + str(sol_solver.nodes_expanded))
+    print("fringe_size: " + str(sol_solver.fringe_size))
+    print("max_fringe_size: " + str(sol_solver.max_fringe_size))
+    print("search_depth: " + str(sol_solver.search_depth))
+    print("max_search_depth: " + str(sol_solver.max_search_depth))
+    print("max_ram_usage " + str(memory()) + "\n")
 
 goal_state = [0, 1, 2, 3, 4, 5, 6, 7, 8]
-file = open("output.txt", "w")
-initial_state = State(map(int, sys.argv[2].split(',')), "", None, 0)
+#file = open("output.txt", "w")
+initial_state = State([4, 1, 3, 7, 6, 0, 5, 2, 8], [], [], 0)
 sol_solver = Solver(initial_state)
 start = timeit.default_timer()
-search = ""
-if sys.argv[1] == "bfs":
-    search = bfs(sol_solver, initial_state, goal_state)
-elif sys.argv[1] == "dfs":
-    search = dfs(sol_solver, initial_state, goal_state)
-elif sys.argv[1] == "ast":
-    search = ast(sol_solver, initial_state, goal_state)
+bfs(sol_solver, initial_state, goal_state)
+print_end(sol_solver, "BFS:")
+dfs(sol_solver, initial_state, goal_state)
+print_end(sol_solver, "DFS:")
+ast(sol_solver, initial_state, goal_state)
+print_end(sol_solver, "AST:")
 stop = timeit.default_timer()
-if not search:
-    file.write("not solvable")
-else:
-    file.write("path_to_goal: " + str(sol_solver.path_to_goal) + "\n")
-    file.write("cost_of_path: " + str(len(sol_solver.path_to_goal)) + "\n")
-    file.write("nodes_expanded: " + str(sol_solver.nodes_expanded) + "\n")
-    file.write("fringe_size: " + str(sol_solver.fringe_size) + "\n")
-    file.write("max_fringe_size: " + str(sol_solver.max_fringe_size) + "\n")
-    file.write("search_depth: " + str(sol_solver.search_depth) + "\n")
-    file.write("max_search_depth: " + str(sol_solver.max_search_depth) + "\n")
-    file.write("running_time: " + str(stop - start) + "\n")
-    file.write("max_ram_usage " + str(memory()) + "\n")
+print("running_time: " + str(stop - start))
+#if not search:
+#    file.write("not solvable")
+#else:
+#    file.write("path_to_goal: " + str(sol_solver.path_to_goal) + "\n")
+#    file.write("cost_of_path: " + str(len(sol_solver.path_to_goal)) + "\n")
+#    file.write("nodes_expanded: " + str(sol_solver.nodes_expanded) + "\n")
+#    file.write("fringe_size: " + str(sol_solver.fringe_size) + "\n")
+#    file.write("max_fringe_size: " + str(sol_solver.max_fringe_size) + "\n")
+#    file.write("search_depth: " + str(sol_solver.search_depth) + "\n")
+#    file.write("max_search_depth: " + str(sol_solver.max_search_depth) + "\n")
+#    file.write("running_time: " + str(stop - start) + "\n")
+#    file.write("max_ram_usage " + str(memory()) + "\n")
 
