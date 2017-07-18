@@ -18,28 +18,6 @@ def memory():
         p = psutil.Process()
         return float(p.memory_info().rss / 1048576)
 
-class PriorityQueue(object):
-    """Queue with priority based on path and add order."""
-    def __init__(self):
-        self.elements = []
-        self.counter = itertools.count()
-        self.entries = 0
-    def isEmpty(self):
-        return len(self.elements) == 0
-    def put(self, item, priority):
-        heapq.heappush(self.elements, (float(str("%s%s" % (priority, next(self.counter)))), item))
-    def deleteMin(self):
-        return heapq.heappop(self.elements)[1]
-    def get_item(self, item):
-        for e in range(0, len(self.elements)):
-            if self.elements[e][1].configuration == item.configuration:
-                to_return = self.elements[e]
-                self.elements.remove(self.elements[e])
-                return to_return[1]
-    def decreaseKey(self, item, solver):
-        old = self.get_item(item)
-        self.put(old, item.depth + solver.manhattan_distance(item, goal_state))
-
 class State(object):
     """Represents a state/ node."""
     def __init__(self, configuration, path, parent, depth):
@@ -49,7 +27,7 @@ class State(object):
         self.depth = depth
     def __eq__(self, other):
         if isinstance(other, tuple) or isinstance(other, list):
-            return self.configuration == other[1].configuration
+            return self.configuration == other[2].configuration
         else:
             return other and self.configuration == other.configuration
     def __lt__(self, other):
@@ -205,32 +183,38 @@ def ast(solver, initial_state, goal_test):
     Frontier is a priority queue"""
     if not solver.solvable(initial_state.configuration):
         return False
-    frontier = PriorityQueue()
-    frontier.put(initial_state, solver.manhattan_distance(initial_state, goal_state))
+    frontier = []
+    counter = 0
+    heapq.heappush(frontier, [solver.manhattan_distance(initial_state, goal_state), counter, initial_state])
     explored = set()
     explored.add(str(initial_state.configuration))
-    while not frontier.isEmpty():
-        solver.max_fringe_size = max(solver.max_fringe_size, len(frontier.elements))
-        current_state = frontier.deleteMin()
+    while len(frontier) > 0:
+        solver.max_fringe_size = max(solver.max_fringe_size, len(frontier))
+        current_state = heapq.heappop(frontier)[2]
         if current_state.configuration == goal_test:
-            solver.fringe_size = len(frontier.elements)
+            solver.fringe_size = len(frontier)
             solver.path_to_goal = solver.generate_path(initial_state, current_state)
             solver.search_depth = len(solver.path_to_goal)
             return current_state
         solver.nodes_expanded += 1
         for n in solver.generate_neighbours(current_state):
             if str(n.configuration) not in explored:
-                frontier.put(n, float(str("%s.%s" % (n.depth + solver.manhattan_distance(n, goal_state), n.path))))
+                counter += 1
+                heapq.heappush(frontier, [float(str("%s.%s" % (n.depth + solver.manhattan_distance(n, goal_state), n.path))), counter, n])
                 explored.add(str(n.configuration))
                 solver.max_search_depth = max(solver.max_search_depth, n.depth)
-            elif n in frontier.elements:
-                frontier.decreaseKey(n, solver)
+            elif n in frontier:
+                index = frontier.index(n)
+                cost = float(str("%s.%s" % (n.depth + solver.manhattan_distance(n, goal_state), n.path)))
+                if frontier[index][0] >= cost:
+                    frontier[index][0] = cost
+                    heapq.heapify(frontier)
     return False
 
 def print_end(sol_solver, method):
-    """Prints details from solve."""
+    """Prints details from solver."""
     print(method)
-    #print("path_to_goal: " + str(sol_solver.path_to_goal))
+    print("path_to_goal: " + str(sol_solver.path_to_goal))
     print("cost_of_path: " + str(len(sol_solver.path_to_goal)))
     print("nodes_expanded: " + str(sol_solver.nodes_expanded))
     print("fringe_size: " + str(sol_solver.fringe_size))
@@ -244,8 +228,10 @@ goal_state = list(range(1, 16)) + [0]
 #file = open("output.txt", "w")
 #initial_state = State([1,2,5,3,4,0,6,7,8], [], [], 0)
 #initial_state = State([4, 1, 3, 7, 6, 0, 5, 2, 8], [], [], 0)
-initial_state = State([1,2,8,3,6,0,7,4,5,9,13,15,10,11,12,14], [], [], 0)
-#initial_state = State([8,6,2,14,4,0,15,1,13,12,9,7,3,5,10,11], [], [], 0)
+#initial_state = State([1,2,8,3,6,0,7,4,5,9,13,15,10,11,12,14], [], [], 0) # solved fast
+#initial_state = State([8,6,2,14,4,0,15,1,13,12,9,7,3,5,10,11], [], [], 0) # unsolved
+#initial_state = State([7,2,4,5,0,6,8,3,1], [], [], 0)
+initial_state = State([5,1,4,15,13,14,3,0,6,9,8,10,11,12,2,7], [], [], 0) # solved in 40s
 sol_solver = Solver(initial_state)
 start = timeit.default_timer()
 #bfs(sol_solver, initial_state, goal_state)
