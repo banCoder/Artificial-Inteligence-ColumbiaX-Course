@@ -1,7 +1,0 @@
-<?xml version="1.0"?>
-<ProfilingTarget xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
-  <ProjectTarget>
-    <TargetProject>5f3f91e4-8176-448e-bb63-720f531e64bf</TargetProject>
-    <FriendlyName>driver</FriendlyName>
-  </ProjectTarget>
-</ProfilingTarget>
