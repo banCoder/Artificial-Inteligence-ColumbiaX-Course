@@ -25,6 +25,8 @@ class Node(object):
         self.path = path
         self.parent = parent
         self.depth = depth
+    def __eq__(self, other):
+        return self.state == other[3].state
 
 class Solver(object):
     """Handles all solving methods."""
@@ -41,6 +43,7 @@ class Solver(object):
         self.search_depth = 0
         self.max_search_depth = 0
         self.path_to_goal = []
+        self.memory_usage = 0
     def solvable(self, state):
         """Teests if puzzle is solvable."""
         inversions = 0
@@ -109,13 +112,14 @@ class Solver(object):
     def manhattan_distance(self, current_node, goal_state):
         """Returns Manhattan distance from current state to goal."""
         m_distance = 0
-        for n in range(self.n):
+        for n in range(1, self.n):
             current_index = current_node.state.index(n)
             goal_index = goal_state.index(n)
             m_distance += abs((current_index % self.row) - (goal_index % self.row)) + abs((current_index // self.row) - (goal_index // self.row))
         return m_distance
 
-def bfs(solver, initial_node, goal_test):
+
+def bfs(solver, initial_node, goal_state):
     """Breadth First Search.
     
     Frontier is a Queue - FILO."""
@@ -128,7 +132,8 @@ def bfs(solver, initial_node, goal_test):
     while frontier:
         solver.max_fringe_size = max(solver.max_fringe_size, len(frontier))
         current_node = frontier.popleft()
-        if current_node.state == goal_test:
+        if current_node.state == goal_state:
+            solver.memory_usage = memory()
             solver.fringe_size = len(frontier)
             solver.path_to_goal = solver.retrace_path(initial_node, current_node) 
             solver.search_depth = len(solver.path_to_goal)
@@ -141,10 +146,11 @@ def bfs(solver, initial_node, goal_test):
                 solver.max_search_depth = max(solver.max_search_depth, node.depth)
     return False
 
-def dfs(solver, initial_node, goal_test):
+def dfs(solver, initial_node, goal_state):
     """Depth first search.
     
-    Frontier is a Stack - LIFO."""
+    Frontier is a Stack - LIFO.
+    Checks if node is discovered before pushing."""
     if not solver.solvable(initial_node.state):
         return False
     frontier = []
@@ -154,10 +160,11 @@ def dfs(solver, initial_node, goal_test):
     while frontier:
         solver.max_fringe_size = max(solver.max_fringe_size, len(frontier))
         current_node = frontier.pop()
-        if current_node.state == goal_test:
+        if current_node.state == goal_state:
+            solver.memory_usage = memory()
             solver.fringe_size = len(frontier)
             solver.path_to_goal = solver.retrace_path(initial_node, current_node)
-            solver.search_depth = len(solver.path_to_goal)
+            solver.search_depth = len(solver.path_to_goal)            
             return current_node
         solver.nodes_expanded += 1
         for node in solver.generate_neighbours_RLDU(current_node):
@@ -167,10 +174,94 @@ def dfs(solver, initial_node, goal_test):
                 solver.max_search_depth = max(solver.max_search_depth, node.depth)
     return False
 
-def ast(solver, initial_node, goal_test):
-    """A* search.
+def dfs_popped(solver, initial_node, goal_state):
+    """Depth first search.
     
-    Frontier is a priority queue."""
+    Frontier is a Stack - LIFO.
+    Checks if node is discovered when popped."""
+    if not solver.solvable(initial_node.state):
+        return False
+    frontier = []
+    frontier.append(initial_node)
+    explored = set()
+    while frontier:
+        solver.max_fringe_size = max(solver.max_fringe_size, len(frontier))
+        current_node = frontier.pop()
+        if str(current_node.state) not in explored:
+            explored.add(str(current_node.state))
+            if current_node.state == goal_state:
+                solver.memory_usage = memory()
+                solver.fringe_size = len(frontier)
+                solver.path_to_goal = solver.retrace_path(initial_node, current_node)
+                solver.search_depth = len(solver.path_to_goal)            
+                return current_node
+            solver.nodes_expanded += 1
+            for node in solver.generate_neighbours_RLDU(current_node):
+                frontier.append(node)
+                solver.max_search_depth = max(solver.max_search_depth, node.depth)
+    return False
+
+def iddfs(solver, initial_node, goal_state):
+    """Iterative deepening depth first search.
+    
+    Repeats DFS for each depth and branch.
+    Frontier is a Stack - LIFO."""
+    if not solver.solvable(initial_node.state):
+        return False
+    for depth in itertools.count(1):
+        frontier = [initial_node]  
+        solver.max_search_depth = 0
+        while frontier:
+            solver.max_fringe_size = max(solver.max_fringe_size, len(frontier))
+            current_node = frontier.pop()
+            if current_node.depth > depth:
+                continue
+            if current_node.state == goal_state:
+                solver.memory_usage = memory()
+                solver.fringe_size = len(frontier)
+                solver.path_to_goal = solver.retrace_path(initial_node, current_node)
+                solver.search_depth = len(solver.path_to_goal)
+                return current_node
+            solver.nodes_expanded += 1
+            for node in solver.generate_neighbours_RLDU(current_node):
+                frontier.append(node)
+                solver.max_search_depth = max(solver.max_search_depth, node.depth)
+    return False
+
+def iddfs_recursive(solver, initial_state, goal_state):
+    """Recursive Iterative deepening depth first search.
+    
+    Repeats DFS for each depth and branch.
+    Frontier is a Stack - LIFO."""
+    def dfs(frontier, depth):
+        if depth == 0:
+            return
+        current_node = frontier[-1]
+        if current_node.state == goal_state:
+            solver.memory_usage = memory()
+            solver.fringe_size = len(frontier)
+            solver.path_to_goal = solver.retrace_path(initial_node, current_node)
+            solver.search_depth = len(solver.path_to_goal)
+            return frontier
+        solver.nodes_expanded += 1
+        solver.max_fringe_size = max(solver.max_fringe_size, len(frontier))
+        for node in solver.generate_neighbours_RLDU(current_node):
+            solver.max_search_depth = max(solver.max_search_depth, node.depth)
+            next_route = dfs(frontier + [node], depth - 1)            
+            if next_route:
+                return next_route
+
+    for depth in itertools.count(1):
+        solver.max_search_depth = 0
+        route = dfs([initial_state], depth)
+        if route:
+            return route       
+
+def ast_none(solver, initial_node, goal_state):
+    """A* search.
+       
+    Frontier is a priority queue.
+    Updates no explored nodes."""
     if not solver.solvable(initial_node.state):
         return False
     frontier = []
@@ -181,7 +272,8 @@ def ast(solver, initial_node, goal_test):
     while frontier:
         solver.max_fringe_size = max(solver.max_fringe_size, len(frontier))
         current_node = heapq.heappop(frontier)[3]
-        if current_node.state == goal_test:
+        if current_node.state == goal_state:
+            solver.memory_usage = memory()
             solver.fringe_size = len(frontier)
             solver.path_to_goal = solver.retrace_path(initial_node, current_node)
             solver.search_depth = len(solver.path_to_goal)
@@ -190,44 +282,232 @@ def ast(solver, initial_node, goal_test):
         for node in solver.generate_neighbours(current_node):
             if str(node.state) not in explored:
                 counter += 1
-                node_priority = [node.depth + solver.manhattan_distance(node, goal_state), node.path, counter, node]
-                heapq.heappush(frontier, node_priority)
+                heapq.heappush(frontier, [solver.manhattan_distance(node, goal_state) + node.depth, node.path, counter, node])
                 explored.add(str(node.state))
                 solver.max_search_depth = max(solver.max_search_depth, node.depth)
     return False
 
-def print_end(sol_solver, method):
+def ast_smaller(solver, initial_node, goal_state):
+    """A* search.
+       
+    Frontier is a priority queue.
+    Updates nodes if cost is smaller."""
+    if not solver.solvable(initial_node.state):
+        return False
+    frontier = []
+    counter = 0
+    heapq.heappush(frontier, [solver.manhattan_distance(initial_node, goal_state), 0, counter, initial_node])
+    while frontier:
+        solver.max_fringe_size = max(solver.max_fringe_size, len(frontier))
+        current_node = heapq.heappop(frontier)[3]
+        if current_node.state == goal_state:
+            solver.memory_usage = memory()
+            solver.fringe_size = len(frontier)
+            solver.path_to_goal = solver.retrace_path(initial_node, current_node)
+            solver.search_depth = len(solver.path_to_goal)
+            return current_node
+        solver.nodes_expanded += 1
+        for node in solver.generate_neighbours(current_node):
+            if node not in frontier:
+                counter += 1
+                heapq.heappush(frontier, [solver.manhattan_distance(node, goal_state) + node.depth, node.path, counter, node])
+                solver.max_search_depth = max(solver.max_search_depth, node.depth)
+            else:
+                index = frontier.index(node)
+                new_cost = solver.manhattan_distance(node, goal_state) + node.depth
+                if new_cost < frontier[index][0]:
+                    counter += 1
+                    frontier[index] = [new_cost, node.path, counter, node]
+                    heapq.heapify(frontier)
+                    solver.max_search_depth = max(solver.max_search_depth, node.depth)
+    return False
+
+def ast_smaller3(solver, initial_node, goal_state):
+    """A* search.
+       
+    Frontier is a priority queue.
+    Updates nodes if cost is smaller."""
+    if not solver.solvable(initial_node.state):
+        return False
+    frontier = []
+    frontier_copy = set()
+    counter = 0
+    explored = set()
+    heapq.heappush(frontier, [solver.manhattan_distance(initial_node, goal_state), 0, counter, initial_node])
+    frontier_copy.add(str(initial_node.state))
+    while frontier_copy:
+        solver.max_fringe_size = max(solver.max_fringe_size, len(frontier_copy))
+        current_node = heapq.heappop(frontier)[3]
+        frontier_copy.remove(str(current_node.state))
+        explored.add(str(current_node.state))
+        if current_node.state == goal_state:
+            solver.memory_usage = memory()
+            solver.fringe_size = len(frontier_copy)
+            solver.path_to_goal = solver.retrace_path(initial_node, current_node)
+            solver.search_depth = len(solver.path_to_goal)
+            return current_node
+        solver.nodes_expanded += 1
+        for node in solver.generate_neighbours(current_node):
+            if str(node.state) in explored:
+                continue
+            if str(node.state) not in frontier_copy:
+                counter += 1
+                heapq.heappush(frontier, [solver.manhattan_distance(node, goal_state) + node.depth, node.path, counter, node])
+                frontier_copy.add(str(node.state))   
+                solver.max_search_depth = max(solver.max_search_depth, node.depth)
+            else:
+                index = frontier.index(node)
+                new_cost = solver.manhattan_distance(node, goal_state) + node.depth
+                if new_cost < frontier[index][0]:
+                    counter += 1
+                    frontier[index] = [new_cost, node.path, counter, node]
+                    heapq.heapify(frontier)
+                    solver.max_search_depth = max(solver.max_search_depth, node.depth)
+    return False
+
+def ast_all(solver, initial_node, goal_state):
+    """A* search.
+       
+    Frontier is a priority queue.
+    Updates all child nodes."""
+    if not solver.solvable(initial_node.state):
+        return False
+    frontier = []
+    counter = 0 
+    heapq.heappush(frontier, [solver.manhattan_distance(initial_node, goal_state), 0, counter, initial_node])
+    while frontier:        
+        solver.max_fringe_size = max(solver.max_fringe_size, len(frontier))
+        current_node = heapq.heappop(frontier)[3]
+        if current_node.state == goal_state:
+            solver.memory_usage = memory()
+            solver.fringe_size = len(frontier)
+            solver.path_to_goal = solver.retrace_path(initial_node, current_node)
+            solver.search_depth = len(solver.path_to_goal)
+            return current_node
+        solver.nodes_expanded += 1
+        for node in solver.generate_neighbours(current_node):
+            counter += 1
+            heapq.heappush(frontier, [solver.manhattan_distance(node, goal_state) + node.depth, node.path, counter, node])
+            solver.max_search_depth = max(solver.max_search_depth, node.depth)
+    return False  
+
+def idast(solver, initial_node, goal_state):
+    """Iterative deepening A* search.
+    
+    Repeats A* for each depth and .
+    Frontier is a Stack - LIFO."""
+    if not solver.solvable(initial_node.state):
+        return False
+    depth = 0    
+    next_min_cost = -1
+    while depth < sys.maxsize:
+        frontier = []
+        counter = 0          
+        initial_depth = solver.manhattan_distance(initial_node, goal_state)    
+        if next_min_cost == -1:
+            depth = initial_depth            
+        else:
+            depth = max(initial_depth, next_min_cost)
+        next_min_cost = 0  
+        heapq.heappush(frontier, [initial_depth, initial_node.path, counter, initial_node])
+        while frontier:        
+            solver.max_fringe_size = max(solver.max_fringe_size, len(frontier))
+            current_node = heapq.heappop(frontier)[3]
+            if current_node.state == goal_state:
+                solver.memory_usage = memory()
+                solver.fringe_size = len(frontier)
+                solver.path_to_goal = solver.retrace_path(initial_node, current_node)
+                solver.search_depth = len(solver.path_to_goal)
+                return current_node
+            solver.nodes_expanded += 1
+            for node in solver.generate_neighbours(current_node):
+                node_cost = solver.manhattan_distance(node, goal_state) + node.depth
+                if node_cost > depth:
+                    if next_min_cost == 0:
+                        next_min_cost = node_cost
+                    else:
+                        next_min_cost = min(node_cost, next_min_cost)
+                else:
+                    counter += 1
+                    heapq.heappush(frontier, [node_cost, node.path, counter, node])
+                    solver.max_search_depth = max(solver.max_search_depth, node.depth)
+    return False
+
+def gbfs(solver, initial_node, goal_state):
+    """Greedy best first search.
+
+    Frontier is a priority queue."""
+    if not solver.solvable(initial_node.state):
+        return False
+    frontier = []
+    counter = 0
+    heapq.heappush(frontier, [solver.manhattan_distance(initial_node, goal_state), counter, initial_node])
+    explored = set()
+    explored.add(str(initial_node.state))
+    while frontier:
+        solver.max_fringe_size = max(solver.max_fringe_size, len(frontier))
+        current_node = heapq.heappop(frontier)[2]
+        if current_node.state == goal_state:
+            solver.memory_usage = memory()
+            solver.fringe_size = len(frontier)
+            solver.path_to_goal = solver.retrace_path(initial_node, current_node)
+            solver.search_depth = len(solver.path_to_goal) 
+            return current_node
+        solver.nodes_expanded += 1
+        for node in solver.generate_neighbours(current_node):
+            if str(node.state) not in explored:
+                counter += 1
+                heapq.heappush(frontier, [solver.manhattan_distance(node, goal_state), counter, node])
+                explored.add(str(node.state))
+                solver.max_search_depth = max(solver.max_search_depth, node.depth)
+    return False
+
+def print_results(solver, algorithm, start = 0, stop = 0):
     """Prints details from solver."""
-    print(method)
-    print("path_to_goal: " + str(sol_solver.path_to_goal))
-    print("cost_of_path: " + str(len(sol_solver.path_to_goal)))
-    print("nodes_expanded: " + str(sol_solver.nodes_expanded))
-    print("fringe_size: " + str(sol_solver.fringe_size))
-    print("max_fringe_size: " + str(sol_solver.max_fringe_size))
-    print("search_depth: " + str(sol_solver.search_depth))
-    print("max_search_depth: " + str(sol_solver.max_search_depth))
-    print("max_ram_usage " + str(memory()) + "\n")
+    print(algorithm)
+    #print("path_to_goal: " + str(solver.path_to_goal))
+    print("cost_of_path: " + str(len(solver.path_to_goal)))
+    print("nodes_expanded: " + str(solver.nodes_expanded))
+    print("fringe_size: " + str(solver.fringe_size))
+    print("max_fringe_size: " + str(solver.max_fringe_size))
+    print("search_depth: " + str(solver.search_depth))
+    print("max_search_depth: " + str(solver.max_search_depth))
+    print("max_ram_usage " + str(solver.memory_usage))
+    print("running_time: " + str(stop - start) + "\n")
+
+def execute_algorithms(solver, initial_node, goal_state, algorithms):
+    """Executes each of alogirthms and prints results."""
+    for algo in algorithms:
+        start = timeit.default_timer()
+        solver.nodes_expanded = 0
+        solver.max_fringe_size = 0
+        solver.max_search_depth = 0
+        algo(solver, initial_node, goal_state)
+        stop = timeit.default_timer()
+        print_results(solver, str(algo), start, stop)
 
 #goal_state = list(range(0, 9))
 goal_state = list(range(1, 16)) + [0]
-#initial_node = Node([1,2,5,3,4,0,6,7,8], 0, [], 0)
+#initial_node = Node([2,0,1,6,7,8,5,3,4], 0, [], 0)
 #initial_node = Node([4,1,3,7,6,0,5,2,8], 0, [], 0)
 #initial_node = Node([7,2,4,5,0,6,8,3,1], 0, [], 0)
 #initial_node = Node([6,0,4,8,2,3,5,1,7], 0, [], 0)
+#initial_node = Node([4,6,5,1,3,2,8,0,7], 0, [], 0)
+#initial_node = Node([7,1,2,0,3,6,5,8,4], 0, [], 0) # different results for AST
+#initial_node = Node([3,1,2,0,4,5,6,7,8], 0, [], 0)
+#initial_node = Node([1,2,5,3,4,0,6,7,8], 0, [], 0)
+#initial_node = Node([8,5,2,7,1,4,6,0,3], 0, [], 0)
+#initial_node = Node([3,1,2,4,7,0,6,8,5], 0, [], 0)
+#initial_node = Node([6,1,8,4,0,2,7,3,5], 0, [], 0)
+#initial_node = Node([0,6,2,1,3,5,7,4,8], 0, [], 0)
 #initial_node = Node([1,2,8,3,6,0,7,4,5,9,13,15,10,11,12,14], 0, [], 0) # solved in 0.2s
-initial_node = Node([8,6,2,14,4,0,15,1,13,12,9,7,3,5,10,11], 0, [], 0) # unsolved
+#initial_node = Node([8,6,2,14,4,0,15,1,13,12,9,7,3,5,10,11], 0, [], 0) # solved in 2846s
 #initial_node = Node([5,1,4,15,13,14,3,0,6,9,8,10,11,12,2,7], 0, [], 0) # solved in 1.2s 0.9s
-#initial_node = Node([1,8,12,14,5,4,15,0,9,11,10,7,13,2,6,3], 0, [], 0) # solved in 27s 5s
+initial_node = Node([1,8,12,14,5,4,15,0,9,11,10,7,13,2,6,3], 0, [], 0) # solved in 27s 5s
 #initial_node = Node([1,2,4,8,9,0,7,10,12,15,13,3,11,6,5,14], 0, [], 0) # solved in 271s 15s
 #initial_node = Node([5,11,2,7,1,12,4,3,13,15,14,9,10,6,8,0], 0, [], 0) # solved in 5677s 56s
+#initial_node = Node([8,4,1,2,9,5,6,3,12,10,14,7,0,13,15,11], 0, [], 0)
+#initial_node = Node([4,1,2,3,5,6,10,7,8,9,0,11,12,13,14,15], 0, [], 0)
 
-sol_solver = Solver(initial_node)
-start = timeit.default_timer()
-#bfs(sol_solver, initial_node, goal_state)
-#print_end(sol_solver, "BFS:")
-#dfs(sol_solver, initial_node, goal_state)
-#print_end(sol_solver, "DFS:")
-ast(sol_solver, initial_node, goal_state)
-print_end(sol_solver, "AST:")
-stop = timeit.default_timer()
-print("running_time: " + str(stop - start))
+solver = Solver(initial_node)
+execute_algorithms(solver, initial_node, goal_state, [ast_smaller3])
